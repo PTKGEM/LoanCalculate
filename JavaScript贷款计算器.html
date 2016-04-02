@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<title>JavaScript贷款计算器</title>
+	<style type="text/css">
+	a {
+		text-decoration: none;
+	}
+
+	a:link,
+	a:visited {
+		color: #2A08F5;
+	}
+	
+	a:hover {
+		color: #FA8414;
+	}
+	a:active {
+		color: #31E518;
+	}
+
+	.output {	/*计算结果定义为粗体*/
+		font-weight: bold;
+	}
+
+	#payment {	/*id="payment"加下划线*/
+		text-decoration: underline;
+	}
+
+	#graph {	/*图表有一个一像素的边框*/
+		border: 1px solid #000;
+	}
+
+	th,
+	td {		/*表格单元格顶端对齐*/
+		vertical-align: top;
+	}
+	</style>
+</head>
+<body>
+	<!-- 这是一个Html表格，其中包含input元素可以用来输入数据
+	程序将在<span>元素中显示计算结果，这些元素都具有类似"interset"和"years"的id，
+	这些id将在表格下面的JavaScript代码中用到。注意有一些input元素定义了"onchange"或"onclick"的事件处理程序，以便用户在输入数据的或者点击input时执行指定的JavaScript代码段 -->
+	<table>
+		<tr>
+			<th>输入贷款相关数据:</th>
+			<td></td>
+			<th>贷款平均值，累积资产，利息</th>
+		</tr>
+		<tr>
+			<td>贷款总金额(￥):</td>
+			<td><input type="text" id="amount" onchange="calculate();" /></td>
+			<td rowspan="8"><canvas id="graph" width="400" height="259"></canvas></td>
+		</tr>
+		<tr>
+			<td>年利率(%):</td>
+			<td><input type="text" id="apr" onchange="calculate()" /></td>
+		</tr>
+		<tr>
+			<td>偿还周期(年):</td>
+			<td><input type="text" id="years" onchange="calculate()" /></td>
+		</tr>
+		<tr>
+			<td>邮政编码-ZipCode(便于寻找贷方)</td>
+			<td><input type="text" id="zipcode" onchange="calculate()" /></td>
+		</tr>
+		<tr>
+			<td>估计需还款:</td>
+			<td><button onclick="calculate();">计算</button></td>
+		</tr>
+		<tr>
+			<td>月还款:</td>
+			<td>￥<span class="output" id="payment"></span></td>
+		</tr>
+		<tr>
+			<td>合计还款:</td>
+			<td>￥<span class="output" id="total"></span></td>
+		</tr>
+		<tr>
+			<td>总利息:</td>
+			<td>￥<span class="output" id="totalinterest"></span></td>
+		</tr>
+		<tr>
+			<th>赞助商(主办单位):</th>
+			<td colspan="2">可向以下放贷商申请贷款:
+				<div id="lenders">
+					<ul>
+						<li><a href="">O'REILLY</a></li>
+						<li><a href="">图灵社区</a></li>
+					</ul>
+				</div>
+			</td>
+		</tr>
+	</table>
+	
+	<script type="text/javascript">
+		"use strict";	//浏览器支持的话，则开启 ECMAScript 5 的严格格式
+		/*
+		 *这里的脚本定义了caculate()函数
+		 *这个函数从<input>元素中读取数据，计算贷款赔付信息，并将结果显示在<span>元素中
+		 *同样，这里还保存了用户数据，展示了放贷人链接并绘制出了图表
+		*/
+		function calculate () {
+			//查找文档中用于输入输出的元素
+			var amount = document.getElementById('amount');
+			var apr = document.getElementById('apr');
+			var years = document.getElementById('years');
+			var zipcode = document.getElementById('zipcode');
+			var payment = document.getElementById('payment');
+			var total = document.getElementById('total');
+			var totalinterest = document,getElementById('totalinterest');
+
+			//假设所有的输入都是合法的，将从<input>元素中获取输入数据
+			//将百分比格式转换为小数格式，并将年利率转换为月利率
+			//将年度赔付转换为月度赔付
+			var principal = parseFloat(amount.value);
+			var interset = parseFloat(apr.value) /100 /12;
+			var payments = parseFloat(years.value) * 12;
+
+			//现在计算月度赔付的数据
+			var x = Math.pow(1 + interset, payment);  //Math.pow()进行幂次运算
+			var monthly = (principal * x * interset) / (x - 1);
+
+			//如果没有超过JavaScript能表示的数字范围，且用户的输入也正确
+			//这里所展示的结果就是合法的
+			if (isFinite(monthly)) {
+				//将数据填充至输出字段的位置，四舍五入到小数点后两位数字
+				payment.innerHTML = monthly.toFixed(2);
+				total.innerHTML = (monthly*payments).toFixed(2);
+
+				//将用户的输入数据保存下来，这样在下次访问时也能取得数据
+				save(amount.value, apr.value, years.value, zipcode.value);
+
+				//找到并展示本地放贷人，但忽略网络错误
+				try { //捕捉这段代码抛出的所有异常
+					getLenders(amount, value, apr.value, years.value, zipcode.value);
+				}
+				catch(e) {/*忽略这些异常*/};
+
+				//最后，用图表展示贷款金额，利息和资产收益
+				chart(principal, interset, monthly, payments);
+			}
+			else {
+				//计算结果不是数字或者是无穷大，意味着输入数据是非法或是不完整的
+				//清空之前的输出数据
+				payment.innerHTML = "";		//清空元素的文本内容
+				total.innerHTML = "";
+				totalinterest.innerHTML = "";
+				chart();					//不传参数的话就是清空图表
+			}
+		}
+
+		//将用户的输入保存到localStorage对象的属性中
+		//这些数据在再次访问时还会继续保存在原位置
+		//如果你在浏览器中按照file://URL的方式直接打开本地文件
+		//则无法在某些浏览器中使用存储功能（比如FF）
+		//而通过HTTP打开文件是可行的
+		function save (amount, apr, years, zipcode) {
+			if (window.localStorage) { //只有在浏览器支持的时候才运行这里代码
+				localStorage.loan_amount = amount;
+				localStorage.loan_apr = apr;
+				localStorage.loan_years = years;
+				localStorage.loan_zipcode = zipcode;
+			}
+		}
+
+		//在文档首次加载时，将会尝试还原输入字段
+		window.onload = function () {
+			//如果浏览器支持本地存储并且上次保存的值是存在的
+			if (window.localStorage && localStorage.loan_amount) {
+				document.getElementById('amount').value = localStorage.loan_amount;
+				document.getElementById('apr').value = localStorage.loan_apr;
+				document.getElementById('years').value = localStorage.loan_years;
+				document.getElementById('zipcode').value = localStorage.loan_zipcode;
+			}
+		}
+
+		//将用户的输入发送至服务器端简本（理论上）
+		//将返回一个本地放贷人链接列表，在这个例子中并没有实现查找放贷人的服务
+		//但如果该服务存在，该函数会使用它
+		function getLenders (amount, apr, years, zipcode) {
+			//如果浏览器不支持XMLHttpRequest对象，则退出
+			if (!window.XMLHttpRequest) {
+				return;
+			}
+
+			//找到要显示放贷人列表的元素
+			var ad = document.getElementById('lenders');
+			if (!ad) { //如果返回为空，则退出
+				return;
+			}
+
+			//将用户的输入数据进行URL编码，并作为查询参数附加在URL里
+			var url = "getLenders.php" + 			//处理数据的URL地址
+			"?amt=" + encodeURIComponent(amount) +  //使用查询库中的数据
+				"&apr=" + encodeURIComponent(apr) +
+				"&yrs=" + encodeURIComponent(years) + 
+				"&zip=" + encodeURIComponent(zipcode);
+
+			//通过XMLHttpRequest对象来提取返回数据
+			var req = new XMLHttpRequest();		//发起一个新的请求
+			req.open("GET", url);				//通过URL发起一个HTTP GET请求
+			req.send(null);						//不带任何正文发送这个请求
+
+			//在返回数据之前，注册了一个事件处理函数
+			//这个函数将会在服务器的响应返回至客户端的时候调用
+			//这种异步编程在客户端JavaScript中是十分常见的
+			req.onreadystatechange = function () {
+				if (req.readyState == 4 && req.status == 200) {
+					//如果代码运行到这里，说明我们得到了一个合法且完整的HTTP响应
+					var response = req.responseText;  //HTTP响应是以字符串的形式呈现的
+					var lenders = JSON.parse(response);  //将其解析为JS数组
+
+					//将数组中的放贷人对象转换为HTML字符串形式
+					var list = "";
+					for (var i = lenders.length - 1; i >= 0; i--) {
+						list += "<li><a href='"+ lenders[i].url +"'>" + lenders[i].name + "</a></li>";
+					}
+
+					//将数据在HTML元素中呈现出来
+					ad.innerHTML = "<ul>" + list + "</ul>";
+				}
+			}
+		}
+	</script>
+</body>
+</html>
