@@ -223,6 +223,98 @@
 				}
 			}
 		}
+
+		//在HTML<canvas>元素中用图表展示月度贷款余额，利息和资产收益
+		//如果不传入参数的话，则清空之前的数据
+		function chart (principal, interset, monthly, payment) {
+			var graph = document.getElementById('graph');  //得到<canvas>元素
+			graph.width = graph.width;  //用一种巧妙的方法清除并重画画布
+
+			//如果不传入参数，或者浏览器不支持画布，则直接返回
+			if (arguments.length == 0 || !graph.getContext) {
+				return;
+			}
+
+			//获取画布元素的“context”对象，这个对象定义了一组绘画API
+			var g = graph.getContext("2d");	//所有的画布操作都将基于这个对象
+			var width = graph.width,
+				height = graph.height;		//获取画布大小
+
+			//这里的函数作用是将付款数字和美元数据转换为像素
+			function paymentToX (n) {
+				return n * width / payments;
+			}
+
+			function amountToY (a) {
+				return height - (a * height / (monthly * payments * 1.05));
+			}
+
+			//付款数据是一条从（0，0）到（paymeents, monthly*payments）的直线
+			g.moveTo(paymentToX(0), amountToY(0));		//从左下角开始
+			g.lineTo(paymentToX(payments), amountToY(monthly * payments));//绘制右上方
+			g.lineTo(paymentToX(payments), amountToY(0));	//再至右下方
+			g.closePath();	//将结尾连接至开头
+			g.fillStyle = "#f88";	//亮红色轮廓线
+			g,fill();	//填充矩形
+			g.font = "bold 12px sans-serif"	//定义一种字体
+			g.fillText("Total interset Payments", 20, 20);	//将文字绘制到图例中
+
+			//很多资产数据并不是线性的，很难将其反映至图表中
+			var equity = 0;
+			g.beginPath();		//开始绘制新图形
+			g.moveTo(paymentToX(0), amountToY(0));	//从左下角开始
+			for (var p = 1; p <= payments; p++) {
+				//计算出每一笔赔付的利息
+				var thisMonthsInterest = (principal - equity) * interset;
+				equity += (monthly - thisMonthsInterest);	//得到资产额
+				g.lineTo(paymentToX(p), amountToY(equity));	//将数据绘制到画布上
+			}
+
+			g.lineTo(paymentToX(payments), amountToY(0));	//将数据线绘制至X轴
+			g.closePath();		//将线条结尾连接至线头开头
+			g.fillStyle = "green";	//使用绿色绘制图形
+			g.fill();		//曲线之下的部分均填充
+			g.fillText("Total Equity", 20, 35);		//文本颜色设置为绿色
+
+			//再次循环，余额数据显示为黑色粗线条
+			var bal = principal;
+			g.beginPath();
+			g.moveTo(paymentToX(0), amountToY(bal));
+			for ( var p = 1; p <= payments; p++) {
+				var thisMonthsInterest = bal * interset;
+				bal -= (monthly - thisMonthsInterest);	//得到资产额
+				g.lineTo(paymentToX(p), amountToY(bal));	//将直线连接至某点
+			}
+			g.lineWidth = 3;	//将直线宽度加粗
+			g.stroke();		//绘制余额的曲线
+			g.fillStyle = "black";	//使用黑色字体
+			g.fillText("Loan Balance", 20, 50);	//图例文字
+
+			//将年度数据在X轴做标记
+			g.textAlign = "center";		//文字居中对齐
+			var y = amountToY(0);		//Y坐标设为0
+			for (var year = 1; year*12 <= payments; year++) {	//遍历每年
+				var x = paymentToX(yaer * 12);	//计算标记位置
+				g.fillRect(x - 0.5, y - 3, 1, 3);	//开始绘制标记
+				if (year == 1) {
+					g.fillText("Year", x, y-5);		//在坐标轴做标记
+				}
+				if (year % 5 == 0 && year * 12 !== payments) {	//每5年的数据
+					g.fillText(String(yaer), x, y-5);
+				}	
+			}	
+
+			//将赔付数额标记在右边界
+			g.textAlign = "right";		//文字右对齐
+			g.textBaseline = "middle";	//文字垂直居中
+			var ticks = [monthly * payments, principal];	//将要用到的两个点
+			var rightEdge = paymentToX(payments);	//设置X坐标
+			for (var i = 0; i < ticks.length; i++) {	//对每两个点做循环
+				var y = amountToY(ticks[i]);	//计算每个标记的Y坐标
+				g.fillRect(rightEdge-3, y-0.5, 3, 1);	//绘制标记
+				g.fillText(String(ticks[i].toFixed(0)), rightEdge-5, y);	//绘制文本
+			}
+		}
 	</script>
 </body>
 </html>
